@@ -1,19 +1,10 @@
 package com.ecomm.ecomm_auth_service_application.service;
 
-import com.ecomm.ecomm_auth_service_application.dto.LoginRequestDto;
-import com.ecomm.ecomm_auth_service_application.dto.LoginResponseDto;
-import com.ecomm.ecomm_auth_service_application.dto.SignupRequestDto;
-import com.ecomm.ecomm_auth_service_application.dto.SignupResponseDto;
-import org.springframework.stereotype.Service;
+import com.ecomm.ecomm_auth_service_application.dto.*;
 
-@Service
-public class IAuthService implements AuthService {
+public interface IAuthService {
 
-    public SignupResponseDto signup(SignupRequestDto signupRequestDto) {
-        return null;
-    }
+    UserDto signup(SignupRequestDto signupRequestDto);
 
-    public LoginResponseDto login(LoginRequestDto loginRequestDto) {
-        return null;
-    }
+    UserDto login(LoginRequestDto loginRequestDto);
 }
