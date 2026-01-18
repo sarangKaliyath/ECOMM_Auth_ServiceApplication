@@ -1,5 +1,6 @@
 package com.ecomm.ecomm_auth_service_application.controller;
 
+import com.ecomm.ecomm_auth_service_application.exception.IncorrectPasswordException;
 import com.ecomm.ecomm_auth_service_application.exception.UserAlreadyExistsException;
 import com.ecomm.ecomm_auth_service_application.exception.UserNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -18,5 +19,9 @@ public class ControllerAdvisor {
     @ExceptionHandler(UserNotFoundException.class)
     ResponseEntity<String> handleUserNotFoundException(UserNotFoundException ex) {
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    ResponseEntity<String> handleIncorrectPasswordException(IncorrectPasswordException ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
     }
 }

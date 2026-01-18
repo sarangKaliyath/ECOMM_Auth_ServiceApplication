@@ -1,20 +1,24 @@
 package com.ecomm.ecomm_auth_service_application.service;
 
 import com.ecomm.ecomm_auth_service_application.dto.*;
+import com.ecomm.ecomm_auth_service_application.exception.IncorrectPasswordException;
 import com.ecomm.ecomm_auth_service_application.exception.UserAlreadyExistsException;
+import com.ecomm.ecomm_auth_service_application.exception.UserNotFoundException;
 import com.ecomm.ecomm_auth_service_application.model.Role;
+import com.ecomm.ecomm_auth_service_application.model.Session;
 import com.ecomm.ecomm_auth_service_application.model.State;
 import com.ecomm.ecomm_auth_service_application.model.User;
 import com.ecomm.ecomm_auth_service_application.repository.RoleRepo;
+import com.ecomm.ecomm_auth_service_application.repository.SessionRepo;
 import com.ecomm.ecomm_auth_service_application.repository.UserRepo;
+import io.jsonwebtoken.Jwts;
+import org.antlr.v4.runtime.misc.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Optional;
+import javax.crypto.SecretKey;
+import java.util.*;
 
 import static com.ecomm.ecomm_auth_service_application.mapper.UserMapper.toResponse;
 
@@ -29,6 +33,12 @@ public class AuthService implements IAuthService {
 
     @Autowired
     private BCryptPasswordEncoder bCryptPasswordEncoder;
+
+    @Autowired
+    private SecretKey secretKey;
+
+    @Autowired
+    private SessionRepo sessionRepo;
 
     public UserDto signup(SignupRequestDto signupRequestDto) {
         Optional<User> userOptional = userRepo.findByEmail(signupRequestDto.getEmail());
@@ -66,7 +76,44 @@ public class AuthService implements IAuthService {
         return toResponse(userRepo.save(user));
     }
 
-    public UserDto login(LoginRequestDto loginRequestDto) {
-        return null;
+    public Pair<User, String> login(LoginRequestDto loginRequestDto) {
+        Optional<User> userOptional = userRepo.findByEmail(loginRequestDto.getEmail());
+
+        if (userOptional.isEmpty()) {
+            throw new UserNotFoundException("User with email " + loginRequestDto.getEmail() + " not found");
+        }
+
+        User user = userOptional.get();
+
+        if (!bCryptPasswordEncoder.matches(loginRequestDto.getPassword(), user.getPassword())) {
+            throw new IncorrectPasswordException("Incorrect password");
+        }
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", user.getId());
+
+        List<String> rolesList = new ArrayList<>();
+        for(Role role : user.getRoles()) {
+            rolesList.add(role.getType());
+        }
+
+        claims.put("access", rolesList);
+
+        long currentTimeMillis = System.currentTimeMillis();
+        claims.put("iat", currentTimeMillis);
+        claims.put("exp", currentTimeMillis + 100000);
+        claims.put("issuer", "curr_org");
+
+        String token = Jwts.builder().claims(claims).signWith(secretKey).compact();
+
+        Session session = new Session();
+
+        session.setUser(user);
+        session.setToken(token);
+        session.setCreatedAt(new Date());
+        session.setState(State.ACTIVE);
+        sessionRepo.save(session);
+
+        return new Pair<>(user, token);
     }
 }
