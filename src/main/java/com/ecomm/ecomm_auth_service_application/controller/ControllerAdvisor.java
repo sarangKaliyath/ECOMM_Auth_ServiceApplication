@@ -1,8 +1,6 @@
 package com.ecomm.ecomm_auth_service_application.controller;
 
-import com.ecomm.ecomm_auth_service_application.exception.IncorrectPasswordException;
-import com.ecomm.ecomm_auth_service_application.exception.UserAlreadyExistsException;
-import com.ecomm.ecomm_auth_service_application.exception.UserNotFoundException;
+import com.ecomm.ecomm_auth_service_application.exception.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -21,7 +19,18 @@ public class ControllerAdvisor {
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(IncorrectPasswordException.class)
     ResponseEntity<String> handleIncorrectPasswordException(IncorrectPasswordException ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(InvalidTokenException.class)
+    ResponseEntity<String> handleInvalidTokenException(Exception ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(TokenExpiredException.class)
+    ResponseEntity<String> handleTokenExpiredException(Exception ex) {
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
     }
 }

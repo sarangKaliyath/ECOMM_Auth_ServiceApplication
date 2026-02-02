@@ -44,5 +44,10 @@ public class AuthController {
 
         return new ResponseEntity<>(userDto, headers, HttpStatus.OK);
     }
+
+    @PostMapping("/validate")
+    public void validateToken(@RequestBody TokenValidationRequest req) {
+        authService.validateToken(req.getToken());
+    }
 }
 

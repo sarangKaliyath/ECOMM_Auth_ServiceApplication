@@ -9,4 +9,6 @@ public interface IAuthService {
     UserDto signup(SignupRequestDto signupRequestDto);
 
     Pair<User, String> login(LoginRequestDto loginRequestDto);
+
+    void validateToken(String token);
 }

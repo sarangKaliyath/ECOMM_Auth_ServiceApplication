@@ -1,9 +1,7 @@
 package com.ecomm.ecomm_auth_service_application.service;
 
 import com.ecomm.ecomm_auth_service_application.dto.*;
-import com.ecomm.ecomm_auth_service_application.exception.IncorrectPasswordException;
-import com.ecomm.ecomm_auth_service_application.exception.UserAlreadyExistsException;
-import com.ecomm.ecomm_auth_service_application.exception.UserNotFoundException;
+import com.ecomm.ecomm_auth_service_application.exception.*;
 import com.ecomm.ecomm_auth_service_application.model.Role;
 import com.ecomm.ecomm_auth_service_application.model.Session;
 import com.ecomm.ecomm_auth_service_application.model.State;
@@ -11,6 +9,8 @@ import com.ecomm.ecomm_auth_service_application.model.User;
 import com.ecomm.ecomm_auth_service_application.repository.RoleRepo;
 import com.ecomm.ecomm_auth_service_application.repository.SessionRepo;
 import com.ecomm.ecomm_auth_service_application.repository.UserRepo;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
 import org.antlr.v4.runtime.misc.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +18,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import static com.ecomm.ecomm_auth_service_application.mapper.UserMapper.toResponse;
 
@@ -91,29 +93,51 @@ public class AuthService implements IAuthService {
 
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", user.getId());
+        claims.put("access", user.getRoles().stream().map(Role::getType).toList());
 
-        List<String> rolesList = new ArrayList<>();
-        for(Role role : user.getRoles()) {
-            rolesList.add(role.getType());
-        }
+        Long now = System.currentTimeMillis();
 
-        claims.put("access", rolesList);
-
-        long currentTimeMillis = System.currentTimeMillis();
-        claims.put("iat", currentTimeMillis);
-        claims.put("exp", currentTimeMillis + 100000);
-        claims.put("issuer", "curr_org");
-
-        String token = Jwts.builder().claims(claims).signWith(secretKey).compact();
+        String token = Jwts.builder()
+                .claims(claims)
+                .issuedAt(new Date(now))
+                .expiration(new Date(now + TimeUnit.MINUTES.toMillis(15)))
+                .issuer("curr_org")
+                .signWith(secretKey)
+                .compact()
+                .trim();
 
         Session session = new Session();
 
         session.setUser(user);
         session.setToken(token);
-        session.setCreatedAt(new Date());
+        session.setCreatedAt(new Date(now));
         session.setState(State.ACTIVE);
         sessionRepo.save(session);
 
         return new Pair<>(user, token);
+    }
+
+    public void validateToken(String token) {
+
+        Optional<Session> sessionOptional = sessionRepo.findByToken(token);
+
+        if (sessionOptional.isEmpty() || sessionOptional.get().getState() == State.INACTIVE) {
+            throw new InvalidTokenException("Invalid token, Please login again!");
+        }
+
+        Session session = sessionOptional.get();
+
+        JwtParser jwtParser = Jwts.parser().verifyWith(secretKey).build();
+        Claims claims = jwtParser.parseSignedClaims(token).getPayload();
+
+        long expirationTime = claims.getExpiration().getTime();
+        long currentTimeMillis = System.currentTimeMillis();
+
+        if (currentTimeMillis > expirationTime) {
+            session.setState(State.INACTIVE);
+            session.setUpdatedAt(new Date());
+            sessionRepo.save(session);
+            throw new TokenExpiredException("Token has expired, Please login again!");
+        }
     }
 }
