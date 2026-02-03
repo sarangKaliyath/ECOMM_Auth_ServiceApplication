@@ -96,6 +96,19 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+            <version>4.1.4</version>
+            <scope>compile</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.cdimascio</groupId>
+            <artifactId>dotenv-java</artifactId>
+            <version>3.0.0</version>
+        </dependency>
     </dependencies>
 
     <build>
