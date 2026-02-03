@@ -1,5 +1,6 @@
 package com.ecomm.ecomm_auth_service_application.service;
 
+import com.ecomm.ecomm_auth_service_application.client.KafkaClient;
 import com.ecomm.ecomm_auth_service_application.dto.*;
 import com.ecomm.ecomm_auth_service_application.exception.*;
 import com.ecomm.ecomm_auth_service_application.model.Role;
@@ -9,6 +10,8 @@ import com.ecomm.ecomm_auth_service_application.model.User;
 import com.ecomm.ecomm_auth_service_application.repository.RoleRepo;
 import com.ecomm.ecomm_auth_service_application.repository.SessionRepo;
 import com.ecomm.ecomm_auth_service_application.repository.UserRepo;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
@@ -41,6 +44,12 @@ public class AuthService implements IAuthService {
 
     @Autowired
     private SessionRepo sessionRepo;
+
+    @Autowired
+    private KafkaClient kafkaClient;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     public UserDto signup(SignupRequestDto signupRequestDto) {
         Optional<User> userOptional = userRepo.findByEmail(signupRequestDto.getEmail());
@@ -75,7 +84,17 @@ public class AuthService implements IAuthService {
         rolesList.add(role);
         user.setRoles(rolesList);
 
-        return toResponse(userRepo.save(user));
+        EmailDto emailDto = new EmailDto();
+        emailDto.setTo(signupRequestDto.getEmail());
+        emailDto.setSubject("Welcome to Ecommerce App");
+        emailDto.setBody("Welcome to Ecommerce App " + signupRequestDto.getName() + ", " + "Your account has been created successfully!");
+
+        try {
+            kafkaClient.sendMessage("signup", objectMapper.writeValueAsString(emailDto));
+            return toResponse(userRepo.save(user));
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e.getMessage());
+        }
     }
 
     public Pair<User, String> login(LoginRequestDto loginRequestDto) {
