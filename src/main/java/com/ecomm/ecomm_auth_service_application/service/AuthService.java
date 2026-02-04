@@ -146,17 +146,14 @@ public class AuthService implements IAuthService {
 
         Session session = sessionOptional.get();
 
-        JwtParser jwtParser = Jwts.parser().verifyWith(secretKey).build();
-        Claims claims = jwtParser.parseSignedClaims(token).getPayload();
-
-        long expirationTime = claims.getExpiration().getTime();
-        long currentTimeMillis = System.currentTimeMillis();
-
-        if (currentTimeMillis > expirationTime) {
+        try {
+            JwtParser jwtParser = Jwts.parser().verifyWith(secretKey).build();
+            jwtParser.parseSignedClaims(token).getPayload();
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
             session.setState(State.INACTIVE);
             session.setUpdatedAt(new Date());
             sessionRepo.save(session);
-            throw new TokenExpiredException("Token has expired, Please login again!");
+            throw new TokenExpiredException("Token has expired, Please login again! 2nd");
         }
     }
 }
