@@ -1,7 +1,9 @@
 package com.ecomm.ecomm_auth_service_application.config;
 
+import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.MacAlgorithm;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -32,7 +34,8 @@ public class SpringSecurityConfig {
 
     @Bean
     public SecretKey secretKey() {
-        byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
-        return Keys.hmacShaKeyFor(keyBytes);
+        MacAlgorithm algorithm = Jwts.SIG.HS256;
+        SecretKey secretKey = algorithm.key().build();
+        return secretKey;
     }
 }
