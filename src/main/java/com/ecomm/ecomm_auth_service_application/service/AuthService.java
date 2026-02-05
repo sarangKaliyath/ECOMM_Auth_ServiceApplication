@@ -97,7 +97,30 @@ public class AuthService implements IAuthService {
         }
     }
 
-    public Pair<User, String> login(LoginRequestDto loginRequestDto) {
+    public Pair<LoginResponseDto, String> login(LoginRequestDto loginRequestDto) {
+        User user = validateUser(loginRequestDto);
+
+        String accessToken = createAccessToken(user);
+        String refreshToken = createRefreshToken(user);
+
+        return new Pair<>(new LoginResponseDto(accessToken), refreshToken);
+    }
+
+
+    public void validateAccessToken(String token) {
+        try {
+            JwtParser jwtParser = Jwts.parser().verifyWith(secretKey).build();
+            jwtParser.parseSignedClaims(token);
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            throw new TokenExpiredException("Access token expired");
+        } catch (Exception e) {
+            throw new InvalidTokenException("Invalid access token");
+        }
+    }
+
+    // ******************* Helpers *******************
+
+    private User validateUser(LoginRequestDto loginRequestDto) {
         Optional<User> userOptional = userRepo.findByEmail(loginRequestDto.getEmail());
 
         if (userOptional.isEmpty()) {
@@ -106,54 +129,52 @@ public class AuthService implements IAuthService {
 
         User user = userOptional.get();
 
+        if (user.getState() == State.INACTIVE) {
+            throw new UserInactiveException("User is inactive");
+        }
+
         if (!bCryptPasswordEncoder.matches(loginRequestDto.getPassword(), user.getPassword())) {
             throw new IncorrectPasswordException("Incorrect password");
         }
 
+        return user;
+    }
+
+    private String createAccessToken(User user) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", user.getId());
-        claims.put("access", user.getRoles().stream().map(Role::getType).toList());
+        claims.put("roles",
+                user.getRoles().stream().map(Role::getType).toList()
+        );
 
-        Long now = System.currentTimeMillis();
+        long now = System.currentTimeMillis();
+        Date issuedAt = new Date(now);
+        Date expiryAt = new Date(now + TimeUnit.MINUTES.toMillis(15));
 
-        String token = Jwts.builder()
+        return Jwts.builder()
+                .subject(user.getId().toString())
                 .claims(claims)
-                .issuedAt(new Date(now))
-                .expiration(new Date(now + TimeUnit.MINUTES.toMillis(15)))
-                .issuer("curr_org")
+                .issuedAt(issuedAt)
+                .expiration(expiryAt)
+                .issuer("ecommerce-auth-service")
                 .signWith(secretKey)
                 .compact()
                 .trim();
-
-        Session session = new Session();
-
-        session.setUser(user);
-        session.setToken(token);
-        session.setCreatedAt(new Date(now));
-        session.setState(State.ACTIVE);
-        sessionRepo.save(session);
-
-        return new Pair<>(user, token);
     }
 
-    public void validateToken(String token) {
+    private String createRefreshToken(User user) {
+        String refreshToken = UUID.randomUUID().toString();
 
-        Optional<Session> sessionOptional = sessionRepo.findByToken(token);
+        Session session = new Session();
+        session.setUser(user);
+        session.setRefreshToken(refreshToken);
+        session.setState(State.ACTIVE);
+        session.setCreatedAt(new Date());
 
-        if (sessionOptional.isEmpty() || sessionOptional.get().getState() == State.INACTIVE) {
-            throw new InvalidTokenException("Invalid token, Please login again!");
-        }
+        session.setExpiresAt(new Date(System.currentTimeMillis() + TimeUnit.DAYS.toMillis(7)));
 
-        Session session = sessionOptional.get();
+        sessionRepo.save(session);
 
-        try {
-            JwtParser jwtParser = Jwts.parser().verifyWith(secretKey).build();
-            jwtParser.parseSignedClaims(token).getPayload();
-        } catch (io.jsonwebtoken.ExpiredJwtException e) {
-            session.setState(State.INACTIVE);
-            session.setUpdatedAt(new Date());
-            sessionRepo.save(session);
-            throw new TokenExpiredException("Token has expired, Please login again! 2nd");
-        }
+        return refreshToken;
     }
 }

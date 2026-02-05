@@ -6,6 +6,8 @@ import jakarta.persistence.ManyToOne;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.Date;
+
 @Entity
 @Getter
 @Setter
@@ -14,5 +16,7 @@ public class Session extends BaseModel {
     private User user;
 
     @Column(length = 2048)
-    private String token;
+    private String refreshToken;
+
+    private Date expiresAt;
 }

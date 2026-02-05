@@ -32,22 +32,23 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<UserDto> login(@RequestBody LoginRequestDto loginRequestDto) {
-        Pair<User, String> userPair = authService.login(loginRequestDto);
+    public ResponseEntity<LoginResponseDto> login(@RequestBody LoginRequestDto loginRequestDto) {
+        Pair<LoginResponseDto, String> response = authService.login(loginRequestDto);
 
-        User user = userPair.a;
-        String token = userPair.b;
-        UserDto userDto = toResponse(user);
+        LoginResponseDto loginResponseDto = response.a;
+        String refreshToken = response.b;
 
-        MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
-        headers.add(HttpHeaders.SET_COOKIE, "token=" + token);
+        HttpHeaders headers = new HttpHeaders();
 
-        return new ResponseEntity<>(userDto, headers, HttpStatus.OK);
+        // Refresh token is stored in cookies to prevent XSS attacks
+        headers.add(HttpHeaders.SET_COOKIE, "refreshToken=" + refreshToken + "; HttpOnly; Secure; SameSite=Strict; Path=/auth/refresh; Max-Age=604800");
+
+        return ResponseEntity.status(HttpStatus.OK).headers(headers).body(loginResponseDto);
     }
 
     @PostMapping("/validate")
     public void validateToken(@RequestBody TokenValidationRequest req) {
-        authService.validateToken(req.getToken());
+        authService.validateAccessToken(req.getToken());
     }
 }
 
