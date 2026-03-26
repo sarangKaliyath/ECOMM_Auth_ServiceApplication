@@ -157,7 +157,7 @@ public class AuthService implements IAuthService {
                 .issuedAt(issuedAt)
                 .expiration(expiryAt)
                 .issuer("ecommerce-auth-service")
-                .signWith(secretKey)
+                .signWith(secretKey, Jwts.SIG.HS256)
                 .compact()
                 .trim();
     }

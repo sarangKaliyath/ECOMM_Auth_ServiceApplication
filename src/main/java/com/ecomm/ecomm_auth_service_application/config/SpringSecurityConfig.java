@@ -34,8 +34,6 @@ public class SpringSecurityConfig {
 
     @Bean
     public SecretKey secretKey() {
-        MacAlgorithm algorithm = Jwts.SIG.HS256;
-        SecretKey secretKey = algorithm.key().build();
-        return secretKey;
+        return Keys.hmacShaKeyFor(jwtSecret.getBytes());
     }
 }
