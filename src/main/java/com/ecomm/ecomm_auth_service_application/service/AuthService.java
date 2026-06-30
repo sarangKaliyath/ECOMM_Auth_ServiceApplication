@@ -8,6 +8,7 @@ import com.ecomm.ecomm_auth_service_application.model.*;
 import com.ecomm.ecomm_auth_service_application.repository.RoleRepo;
 import com.ecomm.ecomm_auth_service_application.repository.SessionRepo;
 import com.ecomm.ecomm_auth_service_application.repository.UserRepo;
+import com.ecomm.ecomm_auth_service_application.security.UserPrincipal;
 import com.ecomm.ecomm_auth_service_application.session.RefreshTokenService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -107,8 +108,18 @@ public class AuthService implements IAuthService {
     public Pair<LoginResponseDto, String> login(LoginRequestDto loginRequestDto) {
         User user = validateUser(loginRequestDto);
 
-        String accessToken = jwtService.createAccessToken(user);
-        String refreshToken =  refreshTokenService.createRefreshToken(user);
+        UserPrincipal principal =
+                new UserPrincipal(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getRoles()
+                                .stream()
+                                .map(Role::getType)
+                                .toList()
+                );
+
+        String accessToken = jwtService.createAccessToken(principal);
+        String refreshToken = refreshTokenService.createRefreshToken(user);
 
         return new Pair<>(new LoginResponseDto(accessToken), refreshToken);
     }

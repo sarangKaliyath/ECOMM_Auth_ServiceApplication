@@ -2,6 +2,7 @@ package com.ecomm.ecomm_auth_service_application.jwt;
 
 import com.ecomm.ecomm_auth_service_application.model.Role;
 import com.ecomm.ecomm_auth_service_application.model.User;
+import com.ecomm.ecomm_auth_service_application.security.UserPrincipal;
 import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,16 +20,14 @@ public class JwtService {
     @Autowired
     private SecretKey secretKey;
 
-    public String createAccessToken(User user) {
+    public String createAccessToken(UserPrincipal userPrincipal) {
 
         Map<String, Object> claims = new HashMap<>();
 
-        claims.put("userId", user.getId());
+        claims.put("userId", userPrincipal.getId());
         claims.put(
                 "roles",
-                user.getRoles().stream()
-                        .map(Role::getType)
-                        .toList()
+                userPrincipal.getRoles()
         );
 
         long now = System.currentTimeMillis();
@@ -37,7 +36,7 @@ public class JwtService {
         Date expiryAt = new Date(now + TimeUnit.MINUTES.toMillis(15));
 
         return Jwts.builder()
-                .subject(user.getId().toString())
+                .subject(userPrincipal.getId().toString())
                 .claims(claims)
                 .issuedAt(issuedAt)
                 .expiration(expiryAt)
