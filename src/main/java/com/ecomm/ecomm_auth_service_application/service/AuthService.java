@@ -6,58 +6,47 @@ import com.ecomm.ecomm_auth_service_application.exception.*;
 import com.ecomm.ecomm_auth_service_application.jwt.JwtService;
 import com.ecomm.ecomm_auth_service_application.model.*;
 import com.ecomm.ecomm_auth_service_application.repository.RoleRepo;
-import com.ecomm.ecomm_auth_service_application.repository.SessionRepo;
 import com.ecomm.ecomm_auth_service_application.repository.UserRepo;
-import com.ecomm.ecomm_auth_service_application.security.UserPrincipal;
 import com.ecomm.ecomm_auth_service_application.session.RefreshTokenService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.JwtParser;
-import io.jsonwebtoken.Jwts;
-import org.antlr.v4.runtime.misc.Pair;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 import static com.ecomm.ecomm_auth_service_application.mapper.UserMapper.toResponse;
 
 @Service
 public class AuthService implements IAuthService {
 
-    @Autowired
-    private UserRepo userRepo;
+    private final UserRepo userRepo;
+    private final RoleRepo roleRepo;
+    private final BCryptPasswordEncoder bCryptPasswordEncoder;
+    private final KafkaClient kafkaClient;
+    private final ObjectMapper objectMapper;
+    private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
 
-    @Autowired
-    private RoleRepo roleRepo;
+    public AuthService(
+            UserRepo userRepo,
+            RoleRepo roleRepo,
+            BCryptPasswordEncoder bCryptPasswordEncoder,
+            KafkaClient kafkaClient,
+            ObjectMapper objectMapper,
+            JwtService jwtService,
+            RefreshTokenService refreshTokenService) {
+        this.userRepo = userRepo;
+        this.roleRepo = roleRepo;
+        this.bCryptPasswordEncoder = bCryptPasswordEncoder;
+        this.kafkaClient = kafkaClient;
+        this.objectMapper = objectMapper;
+        this.jwtService = jwtService;
+        this.refreshTokenService = refreshTokenService;
+    }
 
-    @Autowired
-    private BCryptPasswordEncoder bCryptPasswordEncoder;
-
-    @Autowired
-    private SecretKey secretKey;
-
-    @Autowired
-    private SessionRepo sessionRepo;
-
-    @Autowired
-    private KafkaClient kafkaClient;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
-    private JwtService jwtService;
-
-    @Autowired
-    private RefreshTokenService refreshTokenService;
-
+    @Override
     public UserDto signup(SignupRequestDto signupRequestDto) {
         Optional<User> userOptional = userRepo.findByEmail(signupRequestDto.getEmail());
 
@@ -74,7 +63,6 @@ public class AuthService implements IAuthService {
         user.setUpdatedAt(new Date());
 
         Role role;
-
         Optional<Role> roleOptional = roleRepo.findByType("DEFAULT");
 
         if (roleOptional.isEmpty()) {
@@ -94,9 +82,8 @@ public class AuthService implements IAuthService {
         EmailDto emailDto = new EmailDto();
         emailDto.setTo(signupRequestDto.getEmail());
         emailDto.setEmailTemplate(EmailTemplate.SIGNUP_WELCOME);
-        emailDto.setVariables(Map.of(
-                "name", signupRequestDto.getName()
-        ));
+        emailDto.setVariables(Map.of("name", signupRequestDto.getName()));
+
         try {
             kafkaClient.sendMessage("signup", objectMapper.writeValueAsString(emailDto));
             return toResponse(userRepo.save(user));
@@ -105,26 +92,15 @@ public class AuthService implements IAuthService {
         }
     }
 
-    public Pair<LoginResponseDto, String> login(LoginRequestDto loginRequestDto) {
+    // Returns only the refresh token. Access tokens are issued exclusively
+    // by POST /auth/refresh so all login methods share the same token-issuance path.
+    @Override
+    public String login(LoginRequestDto loginRequestDto) {
         User user = validateUser(loginRequestDto);
-
-        UserPrincipal principal =
-                new UserPrincipal(
-                        user.getId(),
-                        user.getEmail(),
-                        user.getRoles()
-                                .stream()
-                                .map(Role::getType)
-                                .toList()
-                );
-
-        String accessToken = jwtService.createAccessToken(principal);
-        String refreshToken = refreshTokenService.createRefreshToken(user);
-
-        return new Pair<>(new LoginResponseDto(accessToken), refreshToken);
+        return refreshTokenService.createRefreshToken(user);
     }
 
-
+    @Override
     public void validateAccessToken(String token) {
         try {
             jwtService.validateAccessToken(token);
@@ -135,7 +111,17 @@ public class AuthService implements IAuthService {
         }
     }
 
-    // ******************* Helpers *******************
+    @Override
+    public RefreshResponseDto refresh(String rawRefreshToken) {
+        return refreshTokenService.refreshAccessToken(rawRefreshToken);
+    }
+
+    @Override
+    public void logout(String rawRefreshToken) {
+        refreshTokenService.invalidateSession(rawRefreshToken);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private User validateUser(LoginRequestDto loginRequestDto) {
         Optional<User> userOptional = userRepo.findByEmail(loginRequestDto.getEmail());

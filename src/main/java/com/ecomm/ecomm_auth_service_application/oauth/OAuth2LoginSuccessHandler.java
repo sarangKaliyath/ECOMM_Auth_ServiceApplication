@@ -1,6 +1,7 @@
 package com.ecomm.ecomm_auth_service_application.oauth;
 
 import com.ecomm.ecomm_auth_service_application.dto.OAuthLoginResult;
+import com.ecomm.ecomm_auth_service_application.security.CookieUtils;
 import com.ecomm.ecomm_auth_service_application.service.GoogleOAuthService;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -8,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
@@ -46,10 +48,11 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         log.info("OAuth login complete. email={}, isNewUser={}",
                 oidcUser.getEmail(), result.isNewUser());
 
-        response.addHeader("Set-Cookie",
-                "refreshToken=" + result.getRefreshToken()
-                        + "; HttpOnly; Secure; SameSite=Strict; Path=/auth/refresh; Max-Age=604800");
+        response.addHeader(
+                HttpHeaders.SET_COOKIE,
+                CookieUtils.refreshTokenCookie(result.getRefreshToken()).toString()
+        );
 
-        response.sendRedirect(frontendRedirectUrl + "?accessToken=" + result.getAccessToken());
+        response.sendRedirect(frontendRedirectUrl);
     }
 }
