@@ -3,10 +3,7 @@ package com.ecomm.ecomm_auth_service_application.service;
 import com.ecomm.ecomm_auth_service_application.client.KafkaClient;
 import com.ecomm.ecomm_auth_service_application.dto.*;
 import com.ecomm.ecomm_auth_service_application.exception.*;
-import com.ecomm.ecomm_auth_service_application.model.Role;
-import com.ecomm.ecomm_auth_service_application.model.Session;
-import com.ecomm.ecomm_auth_service_application.model.State;
-import com.ecomm.ecomm_auth_service_application.model.User;
+import com.ecomm.ecomm_auth_service_application.model.*;
 import com.ecomm.ecomm_auth_service_application.repository.RoleRepo;
 import com.ecomm.ecomm_auth_service_application.repository.SessionRepo;
 import com.ecomm.ecomm_auth_service_application.repository.UserRepo;
@@ -86,9 +83,10 @@ public class AuthService implements IAuthService {
 
         EmailDto emailDto = new EmailDto();
         emailDto.setTo(signupRequestDto.getEmail());
-        emailDto.setSubject("Welcome to Ecommerce App");
-        emailDto.setBody("Welcome to Ecommerce App " + signupRequestDto.getName() + ", " + "Your account has been created successfully!");
-
+        emailDto.setEmailTemplate(EmailTemplate.SIGNUP_WELCOME);
+        emailDto.setVariables(Map.of(
+                "name", signupRequestDto.getName()
+        ));
         try {
             kafkaClient.sendMessage("signup", objectMapper.writeValueAsString(emailDto));
             return toResponse(userRepo.save(user));
