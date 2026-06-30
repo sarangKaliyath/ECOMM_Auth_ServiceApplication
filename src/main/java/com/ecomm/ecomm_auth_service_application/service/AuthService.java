@@ -8,6 +8,7 @@ import com.ecomm.ecomm_auth_service_application.model.*;
 import com.ecomm.ecomm_auth_service_application.repository.RoleRepo;
 import com.ecomm.ecomm_auth_service_application.repository.SessionRepo;
 import com.ecomm.ecomm_auth_service_application.repository.UserRepo;
+import com.ecomm.ecomm_auth_service_application.session.RefreshTokenService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
@@ -52,6 +53,9 @@ public class AuthService implements IAuthService {
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private RefreshTokenService refreshTokenService;
 
     public UserDto signup(SignupRequestDto signupRequestDto) {
         Optional<User> userOptional = userRepo.findByEmail(signupRequestDto.getEmail());
@@ -104,7 +108,7 @@ public class AuthService implements IAuthService {
         User user = validateUser(loginRequestDto);
 
         String accessToken = jwtService.createAccessToken(user);
-        String refreshToken = createRefreshToken(user);
+        String refreshToken =  refreshTokenService.createRefreshToken(user);
 
         return new Pair<>(new LoginResponseDto(accessToken), refreshToken);
     }
@@ -140,21 +144,5 @@ public class AuthService implements IAuthService {
         }
 
         return user;
-    }
-
-    private String createRefreshToken(User user) {
-        String refreshToken = UUID.randomUUID().toString();
-
-        Session session = new Session();
-        session.setUser(user);
-        session.setRefreshToken(refreshToken);
-        session.setState(State.ACTIVE);
-        session.setCreatedAt(new Date());
-
-        session.setExpiresAt(new Date(System.currentTimeMillis() + TimeUnit.DAYS.toMillis(7)));
-
-        sessionRepo.save(session);
-
-        return refreshToken;
     }
 }
