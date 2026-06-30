@@ -3,6 +3,7 @@ package com.ecomm.ecomm_auth_service_application.service;
 import com.ecomm.ecomm_auth_service_application.client.KafkaClient;
 import com.ecomm.ecomm_auth_service_application.dto.*;
 import com.ecomm.ecomm_auth_service_application.exception.*;
+import com.ecomm.ecomm_auth_service_application.jwt.JwtService;
 import com.ecomm.ecomm_auth_service_application.model.*;
 import com.ecomm.ecomm_auth_service_application.repository.RoleRepo;
 import com.ecomm.ecomm_auth_service_application.repository.SessionRepo;
@@ -10,6 +11,7 @@ import com.ecomm.ecomm_auth_service_application.repository.UserRepo;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
 import org.antlr.v4.runtime.misc.Pair;
@@ -47,6 +49,9 @@ public class AuthService implements IAuthService {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private JwtService jwtService;
 
     public UserDto signup(SignupRequestDto signupRequestDto) {
         Optional<User> userOptional = userRepo.findByEmail(signupRequestDto.getEmail());
@@ -98,7 +103,7 @@ public class AuthService implements IAuthService {
     public Pair<LoginResponseDto, String> login(LoginRequestDto loginRequestDto) {
         User user = validateUser(loginRequestDto);
 
-        String accessToken = createAccessToken(user);
+        String accessToken = jwtService.createAccessToken(user);
         String refreshToken = createRefreshToken(user);
 
         return new Pair<>(new LoginResponseDto(accessToken), refreshToken);
@@ -107,9 +112,8 @@ public class AuthService implements IAuthService {
 
     public void validateAccessToken(String token) {
         try {
-            JwtParser jwtParser = Jwts.parser().verifyWith(secretKey).build();
-            jwtParser.parseSignedClaims(token);
-        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            jwtService.validateAccessToken(token);
+        } catch (ExpiredJwtException e) {
             throw new TokenExpiredException("Access token expired");
         } catch (Exception e) {
             throw new InvalidTokenException("Invalid access token");
@@ -136,28 +140,6 @@ public class AuthService implements IAuthService {
         }
 
         return user;
-    }
-
-    private String createAccessToken(User user) {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("userId", user.getId());
-        claims.put("roles",
-                user.getRoles().stream().map(Role::getType).toList()
-        );
-
-        long now = System.currentTimeMillis();
-        Date issuedAt = new Date(now);
-        Date expiryAt = new Date(now + TimeUnit.MINUTES.toMillis(15));
-
-        return Jwts.builder()
-                .subject(user.getId().toString())
-                .claims(claims)
-                .issuedAt(issuedAt)
-                .expiration(expiryAt)
-                .issuer("ecommerce-auth-service")
-                .signWith(secretKey, Jwts.SIG.HS256)
-                .compact()
-                .trim();
     }
 
     private String createRefreshToken(User user) {
