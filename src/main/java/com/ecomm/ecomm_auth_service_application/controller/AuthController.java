@@ -1,53 +1,75 @@
 package com.ecomm.ecomm_auth_service_application.controller;
 
-
 import com.ecomm.ecomm_auth_service_application.dto.*;
-import com.ecomm.ecomm_auth_service_application.model.User;
+import com.ecomm.ecomm_auth_service_application.exception.InvalidTokenException;
+import com.ecomm.ecomm_auth_service_application.security.CookieUtils;
 import com.ecomm.ecomm_auth_service_application.service.IAuthService;
-
-import static com.ecomm.ecomm_auth_service_application.mapper.UserMapper.toResponse;
-
-import org.antlr.v4.runtime.misc.Pair;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
 
-    @Autowired
-    private IAuthService authService;
+    private final IAuthService authService;
+
+    public AuthController(IAuthService authService) {
+        this.authService = authService;
+    }
 
     @PostMapping("/signup")
     public ResponseEntity<UserDto> signup(@RequestBody SignupRequestDto signupRequestDto) {
         return new ResponseEntity<>(authService.signup(signupRequestDto), HttpStatus.CREATED);
     }
 
+    // Validates credentials, creates a refresh session, and sets the HttpOnly cookie.
+    // No access token is returned here — the frontend must call POST /auth/refresh next.
     @PostMapping("/login")
-    public ResponseEntity<UserDto> login(@RequestBody LoginRequestDto loginRequestDto) {
-        Pair<User, String> userPair = authService.login(loginRequestDto);
+    public ResponseEntity<Void> login(@RequestBody LoginRequestDto loginRequestDto,
+                                      HttpServletResponse response) {
+        String refreshToken = authService.login(loginRequestDto);
+        response.addHeader(HttpHeaders.SET_COOKIE,
+                CookieUtils.refreshTokenCookie(refreshToken).toString());
+        return ResponseEntity.noContent().build();
+    }
 
-        User user = userPair.a;
-        String token = userPair.b;
-        UserDto userDto = toResponse(user);
+    // Validates the refresh session, rotates the refresh token (old session invalidated,
+    // new session created), and returns a short-lived access token.
+    @PostMapping("/refresh")
+    public ResponseEntity<RefreshResponseDto> refresh(
+            @CookieValue(name = "refreshToken", required = false) String rawToken,
+            HttpServletResponse response) {
 
-        MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
-        headers.add(HttpHeaders.SET_COOKIE, "token=" + token);
+        if (rawToken == null) {
+            throw new InvalidTokenException("No refresh token cookie present");
+        }
 
-        return new ResponseEntity<>(userDto, headers, HttpStatus.OK);
+        RefreshResponseDto result = authService.refresh(rawToken);
+        response.addHeader(HttpHeaders.SET_COOKIE,
+                CookieUtils.refreshTokenCookie(result.getNewRefreshToken()).toString());
+        return ResponseEntity.ok(result);
+    }
+
+    // Invalidates the refresh session and clears the cookie.
+    // Safe to call even when no cookie is present (idempotent).
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(
+            @CookieValue(name = "refreshToken", required = false) String rawToken,
+            HttpServletResponse response) {
+
+        if (rawToken != null) {
+            authService.logout(rawToken);
+        }
+        response.addHeader(HttpHeaders.SET_COOKIE,
+                CookieUtils.clearRefreshTokenCookie().toString());
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/validate")
     public void validateToken(@RequestBody TokenValidationRequest req) {
-        authService.validateToken(req.getToken());
+        authService.validateAccessToken(req.getToken());
     }
 }
-

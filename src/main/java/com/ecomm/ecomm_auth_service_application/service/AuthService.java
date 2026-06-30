@@ -3,54 +3,50 @@ package com.ecomm.ecomm_auth_service_application.service;
 import com.ecomm.ecomm_auth_service_application.client.KafkaClient;
 import com.ecomm.ecomm_auth_service_application.dto.*;
 import com.ecomm.ecomm_auth_service_application.exception.*;
-import com.ecomm.ecomm_auth_service_application.model.Role;
-import com.ecomm.ecomm_auth_service_application.model.Session;
-import com.ecomm.ecomm_auth_service_application.model.State;
-import com.ecomm.ecomm_auth_service_application.model.User;
+import com.ecomm.ecomm_auth_service_application.jwt.JwtService;
+import com.ecomm.ecomm_auth_service_application.model.*;
 import com.ecomm.ecomm_auth_service_application.repository.RoleRepo;
-import com.ecomm.ecomm_auth_service_application.repository.SessionRepo;
 import com.ecomm.ecomm_auth_service_application.repository.UserRepo;
+import com.ecomm.ecomm_auth_service_application.session.RefreshTokenService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtParser;
-import io.jsonwebtoken.Jwts;
-import org.antlr.v4.runtime.misc.Pair;
-import org.springframework.beans.factory.annotation.Autowired;
+import io.jsonwebtoken.ExpiredJwtException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 import static com.ecomm.ecomm_auth_service_application.mapper.UserMapper.toResponse;
 
 @Service
 public class AuthService implements IAuthService {
 
-    @Autowired
-    private UserRepo userRepo;
+    private final UserRepo userRepo;
+    private final RoleRepo roleRepo;
+    private final BCryptPasswordEncoder bCryptPasswordEncoder;
+    private final KafkaClient kafkaClient;
+    private final ObjectMapper objectMapper;
+    private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
 
-    @Autowired
-    private RoleRepo roleRepo;
+    public AuthService(
+            UserRepo userRepo,
+            RoleRepo roleRepo,
+            BCryptPasswordEncoder bCryptPasswordEncoder,
+            KafkaClient kafkaClient,
+            ObjectMapper objectMapper,
+            JwtService jwtService,
+            RefreshTokenService refreshTokenService) {
+        this.userRepo = userRepo;
+        this.roleRepo = roleRepo;
+        this.bCryptPasswordEncoder = bCryptPasswordEncoder;
+        this.kafkaClient = kafkaClient;
+        this.objectMapper = objectMapper;
+        this.jwtService = jwtService;
+        this.refreshTokenService = refreshTokenService;
+    }
 
-    @Autowired
-    private BCryptPasswordEncoder bCryptPasswordEncoder;
-
-    @Autowired
-    private SecretKey secretKey;
-
-    @Autowired
-    private SessionRepo sessionRepo;
-
-    @Autowired
-    private KafkaClient kafkaClient;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
+    @Override
     public UserDto signup(SignupRequestDto signupRequestDto) {
         Optional<User> userOptional = userRepo.findByEmail(signupRequestDto.getEmail());
 
@@ -67,7 +63,6 @@ public class AuthService implements IAuthService {
         user.setUpdatedAt(new Date());
 
         Role role;
-
         Optional<Role> roleOptional = roleRepo.findByType("DEFAULT");
 
         if (roleOptional.isEmpty()) {
@@ -86,8 +81,8 @@ public class AuthService implements IAuthService {
 
         EmailDto emailDto = new EmailDto();
         emailDto.setTo(signupRequestDto.getEmail());
-        emailDto.setSubject("Welcome to Ecommerce App");
-        emailDto.setBody("Welcome to Ecommerce App " + signupRequestDto.getName() + ", " + "Your account has been created successfully!");
+        emailDto.setEmailTemplate(EmailTemplate.SIGNUP_WELCOME);
+        emailDto.setVariables(Map.of("name", signupRequestDto.getName()));
 
         try {
             kafkaClient.sendMessage("signup", objectMapper.writeValueAsString(emailDto));
@@ -97,7 +92,38 @@ public class AuthService implements IAuthService {
         }
     }
 
-    public Pair<User, String> login(LoginRequestDto loginRequestDto) {
+    // Returns only the refresh token. Access tokens are issued exclusively
+    // by POST /auth/refresh so all login methods share the same token-issuance path.
+    @Override
+    public String login(LoginRequestDto loginRequestDto) {
+        User user = validateUser(loginRequestDto);
+        return refreshTokenService.createRefreshToken(user);
+    }
+
+    @Override
+    public void validateAccessToken(String token) {
+        try {
+            jwtService.validateAccessToken(token);
+        } catch (ExpiredJwtException e) {
+            throw new TokenExpiredException("Access token expired");
+        } catch (Exception e) {
+            throw new InvalidTokenException("Invalid access token");
+        }
+    }
+
+    @Override
+    public RefreshResponseDto refresh(String rawRefreshToken) {
+        return refreshTokenService.refreshAccessToken(rawRefreshToken);
+    }
+
+    @Override
+    public void logout(String rawRefreshToken) {
+        refreshTokenService.invalidateSession(rawRefreshToken);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private User validateUser(LoginRequestDto loginRequestDto) {
         Optional<User> userOptional = userRepo.findByEmail(loginRequestDto.getEmail());
 
         if (userOptional.isEmpty()) {
@@ -106,54 +132,14 @@ public class AuthService implements IAuthService {
 
         User user = userOptional.get();
 
+        if (user.getState() == State.INACTIVE) {
+            throw new UserInactiveException("User is inactive");
+        }
+
         if (!bCryptPasswordEncoder.matches(loginRequestDto.getPassword(), user.getPassword())) {
             throw new IncorrectPasswordException("Incorrect password");
         }
 
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("userId", user.getId());
-        claims.put("access", user.getRoles().stream().map(Role::getType).toList());
-
-        Long now = System.currentTimeMillis();
-
-        String token = Jwts.builder()
-                .claims(claims)
-                .issuedAt(new Date(now))
-                .expiration(new Date(now + TimeUnit.MINUTES.toMillis(15)))
-                .issuer("curr_org")
-                .signWith(secretKey)
-                .compact()
-                .trim();
-
-        Session session = new Session();
-
-        session.setUser(user);
-        session.setToken(token);
-        session.setCreatedAt(new Date(now));
-        session.setState(State.ACTIVE);
-        sessionRepo.save(session);
-
-        return new Pair<>(user, token);
-    }
-
-    public void validateToken(String token) {
-
-        Optional<Session> sessionOptional = sessionRepo.findByToken(token);
-
-        if (sessionOptional.isEmpty() || sessionOptional.get().getState() == State.INACTIVE) {
-            throw new InvalidTokenException("Invalid token, Please login again!");
-        }
-
-        Session session = sessionOptional.get();
-
-        try {
-            JwtParser jwtParser = Jwts.parser().verifyWith(secretKey).build();
-            jwtParser.parseSignedClaims(token).getPayload();
-        } catch (io.jsonwebtoken.ExpiredJwtException e) {
-            session.setState(State.INACTIVE);
-            session.setUpdatedAt(new Date());
-            sessionRepo.save(session);
-            throw new TokenExpiredException("Token has expired, Please login again! 2nd");
-        }
+        return user;
     }
 }

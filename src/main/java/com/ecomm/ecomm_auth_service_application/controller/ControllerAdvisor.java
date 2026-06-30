@@ -33,4 +33,9 @@ public class ControllerAdvisor {
     ResponseEntity<String> handleTokenExpiredException(Exception ex) {
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
     }
+
+    @ExceptionHandler(UserInactiveException.class)
+    ResponseEntity<String> handleUserInactiveException(Exception ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
+    }
 }
