@@ -29,6 +29,7 @@ public class JwtService {
                 "roles",
                 userPrincipal.getRoles()
         );
+        claims.put("email", userPrincipal.getEmail());
 
         long now = System.currentTimeMillis();
 
