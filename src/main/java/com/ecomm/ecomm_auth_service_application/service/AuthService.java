@@ -2,6 +2,7 @@ package com.ecomm.ecomm_auth_service_application.service;
 
 import com.ecomm.ecomm_auth_service_application.client.KafkaClient;
 import com.ecomm.ecomm_auth_service_application.dto.*;
+import com.ecomm.ecomm_auth_service_application.dto.kafka.UserCreatedEvent;
 import com.ecomm.ecomm_auth_service_application.exception.*;
 import com.ecomm.ecomm_auth_service_application.jwt.JwtService;
 import com.ecomm.ecomm_auth_service_application.model.*;
@@ -84,9 +85,22 @@ public class AuthService implements IAuthService {
         emailDto.setEmailTemplate(EmailTemplate.SIGNUP_WELCOME);
         emailDto.setVariables(Map.of("name", signupRequestDto.getName()));
 
+        String[] parts = signupRequestDto.getName().trim().split("\\s+", 2);
+
+        String firstName = parts[0];
+        String lastName = parts.length > 1 ? parts[1] : "";
+
+        User savedUser = userRepo.save(user);
+
+        UserCreatedEvent profileEvent = new UserCreatedEvent();
+        profileEvent.setAuthUserId(savedUser.getId());
+        profileEvent.setFirstName(firstName);
+        profileEvent.setLastName(lastName);
+
         try {
             kafkaClient.sendMessage("signup", objectMapper.writeValueAsString(emailDto));
-            return toResponse(userRepo.save(user));
+            kafkaClient.sendMessage("user-created", objectMapper.writeValueAsString(profileEvent));
+            return toResponse(savedUser);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e.getMessage());
         }
