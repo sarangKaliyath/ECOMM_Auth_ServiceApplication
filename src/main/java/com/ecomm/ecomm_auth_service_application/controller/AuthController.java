@@ -3,7 +3,7 @@ package com.ecomm.ecomm_auth_service_application.controller;
 import com.ecomm.ecomm_auth_service_application.dto.*;
 import com.ecomm.ecomm_auth_service_application.exception.InvalidTokenException;
 import com.ecomm.ecomm_auth_service_application.security.CookieUtils;
-import com.ecomm.ecomm_auth_service_application.service.IAuthService;
+import com.ecomm.ecomm_auth_service_application.service.AuthService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -14,9 +14,9 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/auth")
 public class AuthController {
 
-    private final IAuthService authService;
+    private final AuthService authService;
 
-    public AuthController(IAuthService authService) {
+    public AuthController(AuthService authService) {
         this.authService = authService;
     }
 

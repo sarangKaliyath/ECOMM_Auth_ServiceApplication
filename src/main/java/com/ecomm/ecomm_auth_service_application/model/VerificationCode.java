@@ -1,9 +1,6 @@
 package com.ecomm.ecomm_auth_service_application.model;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -12,14 +9,25 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @Entity
-public class UserOtp extends BaseModel {
-    @ManyToOne
+public class VerificationCode extends BaseModel {
+    @ManyToOne(fetch = FetchType.LAZY)
     private User user;
 
-    private String otp;
+    private String codeHash;
 
     @Enumerated(EnumType.STRING)
-    private OtpType otpType;
+    private VerificationType verificationType;
+
+    @Enumerated(EnumType.STRING)
+    private VerificationStatus verificationStatus;
+
+    private String email;
+
+    private String phoneNumber;
+
+    private Integer attempts;
 
     private LocalDateTime expiryTime;
+
+    private LocalDateTime usedAt;
 }
