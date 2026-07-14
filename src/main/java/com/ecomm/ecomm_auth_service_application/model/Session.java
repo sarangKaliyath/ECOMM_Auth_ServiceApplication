@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.Date;
+import java.util.UUID;
 
 @Entity
 @Getter
@@ -15,8 +16,10 @@ public class Session extends BaseModel {
     @ManyToOne
     private User user;
 
-    @Column(length = 2048)
-    private String refreshToken;
+    @Column(name = "token_hash", length = 64, unique = true)
+    private String tokenHash;
 
     private Date expiresAt;
+
+    private UUID familyId;
 }

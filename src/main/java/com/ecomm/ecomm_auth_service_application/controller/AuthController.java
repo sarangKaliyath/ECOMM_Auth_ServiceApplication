@@ -68,6 +68,23 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
+    // Revokes every active session for the user across all devices/families,
+    // not just the one tied to the presented cookie.
+    @PostMapping("/logout-all")
+    public ResponseEntity<Void> logoutAll(
+            @CookieValue(name = "refreshToken", required = false) String rawToken,
+            HttpServletResponse response) {
+
+        if (rawToken == null) {
+            throw new InvalidTokenException("No refresh token cookie present");
+        }
+
+        authService.logoutAll(rawToken);
+        response.addHeader(HttpHeaders.SET_COOKIE,
+                CookieUtils.clearRefreshTokenCookie().toString());
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/validate")
     public void validateToken(@RequestBody TokenValidationRequest req) {
         authService.validateAccessToken(req.getToken());
