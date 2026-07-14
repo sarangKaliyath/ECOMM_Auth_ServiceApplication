@@ -24,4 +24,10 @@ public interface SessionRepo extends JpaRepository<Session, Long> {
             "s.updatedAt = CURRENT_TIMESTAMP WHERE s.familyId = :familyId " +
             "AND s.state = com.ecomm.ecomm_auth_service_application.model.State.ACTIVE")
     int revokeFamily(@Param("familyId") UUID familyId);
+
+    @Modifying
+    @Query("UPDATE Session s SET s.state = com.ecomm.ecomm_auth_service_application.model.State.INACTIVE, " +
+            "s.updatedAt = CURRENT_TIMESTAMP WHERE s.user.id = :userId " +
+            "AND s.state = com.ecomm.ecomm_auth_service_application.model.State.ACTIVE")
+    int revokeAllSessionsForUser(@Param("userId") Long userId);
 }

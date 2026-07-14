@@ -87,6 +87,14 @@ public class RefreshTokenService {
         });
     }
 
+    // ── Invalidate all sessions for the user (logout everywhere) ─────────────
+
+    @Transactional
+    public void logoutAllSessions(String rawToken) {
+        Session session = validateSession(rawToken);
+        sessionRepo.revokeAllSessionsForUser(session.getUser().getId());
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private Session validateSession(String rawToken) {

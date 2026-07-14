@@ -135,6 +135,11 @@ public class AuthService implements IAuthService {
         refreshTokenService.invalidateSession(rawRefreshToken);
     }
 
+    @Override
+    public void logoutAll(String rawRefreshToken) {
+        refreshTokenService.logoutAllSessions(rawRefreshToken);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private User validateUser(LoginRequestDto loginRequestDto) {

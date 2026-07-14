@@ -13,4 +13,6 @@ public interface IAuthService {
     RefreshResponseDto refresh(String rawRefreshToken);
 
     void logout(String rawRefreshToken);
+
+    void logoutAll(String rawRefreshToken);
 }
