@@ -2,6 +2,7 @@ package com.ecomm.ecomm_auth_service_application.session;
 
 import com.ecomm.ecomm_auth_service_application.dto.RefreshResponseDto;
 import com.ecomm.ecomm_auth_service_application.exception.InvalidTokenException;
+import com.ecomm.ecomm_auth_service_application.exception.RefreshTokenReuseException;
 import com.ecomm.ecomm_auth_service_application.exception.TokenExpiredException;
 import com.ecomm.ecomm_auth_service_application.jwt.JwtService;
 import com.ecomm.ecomm_auth_service_application.model.Role;
@@ -9,6 +10,7 @@ import com.ecomm.ecomm_auth_service_application.model.Session;
 import com.ecomm.ecomm_auth_service_application.model.State;
 import com.ecomm.ecomm_auth_service_application.model.User;
 import com.ecomm.ecomm_auth_service_application.repository.SessionRepo;
+import com.ecomm.ecomm_auth_service_application.security.TokenHasher;
 import com.ecomm.ecomm_auth_service_application.security.UserPrincipal;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,17 +33,24 @@ public class RefreshTokenService {
     // ── Create ────────────────────────────────────────────────────────────────
 
     public String createRefreshToken(User user) {
-        String token = UUID.randomUUID().toString();
+        return createRefreshToken(user, UUID.randomUUID());
+    }
+
+    // Rotation carries the family id forward so every token descended from
+    // the same login can be revoked together if reuse is ever detected.
+    private String createRefreshToken(User user, UUID familyId) {
+        String rawToken = UUID.randomUUID().toString();
 
         Session session = new Session();
         session.setUser(user);
-        session.setRefreshToken(token);
+        session.setTokenHash(TokenHasher.hash(rawToken));
+        session.setFamilyId(familyId);
         session.setState(State.ACTIVE);
         session.setCreatedAt(new Date());
         session.setExpiresAt(new Date(System.currentTimeMillis() + TimeUnit.DAYS.toMillis(7)));
 
         sessionRepo.save(session);
-        return token;
+        return rawToken;
     }
 
     // ── Refresh with rotation ─────────────────────────────────────────────────
@@ -58,7 +67,7 @@ public class RefreshTokenService {
         session.setUpdatedAt(new Date());
         sessionRepo.save(session);
 
-        String newRefreshToken = createRefreshToken(session.getUser());
+        String newRefreshToken = createRefreshToken(session.getUser(), session.getFamilyId());
 
         String accessToken = generateAccessToken(session.getUser());
 
@@ -71,7 +80,7 @@ public class RefreshTokenService {
     // so that logout is always safe to call.
     @Transactional
     public void invalidateSession(String rawToken) {
-        sessionRepo.findByRefreshToken(rawToken).ifPresent(session -> {
+        sessionRepo.findByTokenHash(TokenHasher.hash(rawToken)).ifPresent(session -> {
             session.setState(State.INACTIVE);
             session.setUpdatedAt(new Date());
             sessionRepo.save(session);
@@ -81,11 +90,14 @@ public class RefreshTokenService {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private Session validateSession(String rawToken) {
-        Session session = sessionRepo.findByRefreshToken(rawToken)
+        Session session = sessionRepo.findByTokenHash(TokenHasher.hash(rawToken))
                 .orElseThrow(() -> new InvalidTokenException("Refresh token not found"));
 
         if (session.getState() == State.INACTIVE) {
-            throw new InvalidTokenException("Refresh token has been revoked");
+            // Already-rotated (or revoked) token presented again: treat as theft
+            // and kill every session descended from the same login.
+            sessionRepo.revokeFamily(session.getFamilyId());
+            throw new RefreshTokenReuseException("Refresh token reuse detected; all sessions revoked");
         }
 
         if (session.getExpiresAt().before(new Date())) {

@@ -34,6 +34,11 @@ public class ControllerAdvisor {
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
     }
 
+    @ExceptionHandler(RefreshTokenReuseException.class)
+    ResponseEntity<String> handleRefreshTokenReuseException(Exception ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
+    }
+
     @ExceptionHandler(UserInactiveException.class)
     ResponseEntity<String> handleUserInactiveException(Exception ex) {
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
