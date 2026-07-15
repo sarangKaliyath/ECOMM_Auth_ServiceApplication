@@ -43,4 +43,29 @@ public class ControllerAdvisor {
     ResponseEntity<String> handleUserInactiveException(Exception ex) {
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
     }
+
+    @ExceptionHandler(VerificationCodeNotFoundException.class)
+    ResponseEntity<String> handleVerificationCodeNotFoundException(Exception ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(VerificationCodeExpiredException.class)
+    ResponseEntity<String> handleVerificationCodeExpiredException(Exception ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.GONE);
+    }
+
+    @ExceptionHandler(InvalidVerificationCodeException.class)
+    ResponseEntity<String> handleInvalidVerificationCodeException(Exception ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(TooManyVerificationAttemptsException.class)
+    ResponseEntity<String> handleTooManyVerificationAttemptsException(Exception ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    @ExceptionHandler(UnsupportedVerificationTypeException.class)
+    ResponseEntity<String> handleUnsupportedVerificationTypeException(Exception ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
 }

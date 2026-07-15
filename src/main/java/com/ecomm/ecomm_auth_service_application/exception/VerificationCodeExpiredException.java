@@ -1,0 +1,7 @@
+package com.ecomm.ecomm_auth_service_application.exception;
+
+public class VerificationCodeExpiredException extends RuntimeException {
+    public VerificationCodeExpiredException(String message) {
+        super(message);
+    }
+}
