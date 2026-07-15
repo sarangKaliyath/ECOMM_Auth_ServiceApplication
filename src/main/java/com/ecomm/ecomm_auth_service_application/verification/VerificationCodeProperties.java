@@ -23,12 +23,19 @@ public class VerificationCodeProperties {
     @Value("${code.max-attempts}")
     private int maxAttempts;
 
+    @Value("${code.reset-token-expiry}")
+    private long resetTokenExpiryMinutes;
+
     public int getCodeLength() {
         return codeLength;
     }
 
     public int getMaxAttempts() {
         return maxAttempts;
+    }
+
+    public long getResetTokenExpiryMinutes() {
+        return resetTokenExpiryMinutes;
     }
 
     public long expiryMinutesFor(VerificationType verificationType) {

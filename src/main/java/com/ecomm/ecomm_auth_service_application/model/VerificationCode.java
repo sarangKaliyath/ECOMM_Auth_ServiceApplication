@@ -30,4 +30,10 @@ public class VerificationCode extends BaseModel {
     private LocalDateTime expiryTime;
 
     private LocalDateTime usedAt;
+
+    // Only set once verifyCode succeeds for a PASSWORD_RESET code; nulled out
+    // again after the token is consumed by AuthService.resetPassword so it's single-use.
+    private String resetTokenHash;
+
+    private LocalDateTime resetTokenExpiresAt;
 }

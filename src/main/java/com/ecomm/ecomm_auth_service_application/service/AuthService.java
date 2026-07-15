@@ -15,4 +15,8 @@ public interface AuthService {
     void logout(String rawRefreshToken);
 
     void logoutAll(String rawRefreshToken);
+
+    // Consumes a one-time reset token issued by VerificationService.verifyCode
+    // (PASSWORD_RESET type) and sets the user's new password.
+    void resetPassword(String rawResetToken, String newPassword);
 }

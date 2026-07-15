@@ -8,6 +8,8 @@ import com.ecomm.ecomm_auth_service_application.jwt.JwtService;
 import com.ecomm.ecomm_auth_service_application.model.*;
 import com.ecomm.ecomm_auth_service_application.repository.RoleRepo;
 import com.ecomm.ecomm_auth_service_application.repository.UserRepo;
+import com.ecomm.ecomm_auth_service_application.repository.VerificationCodeRepo;
+import com.ecomm.ecomm_auth_service_application.security.TokenHasher;
 import com.ecomm.ecomm_auth_service_application.service.AuthService;
 import com.ecomm.ecomm_auth_service_application.session.RefreshTokenService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -15,7 +17,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.ExpiredJwtException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.*;
 
 import static com.ecomm.ecomm_auth_service_application.mapper.UserMapper.toResponse;
@@ -25,6 +29,7 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserRepo userRepo;
     private final RoleRepo roleRepo;
+    private final VerificationCodeRepo verificationCodeRepo;
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
     private final KafkaClient kafkaClient;
     private final ObjectMapper objectMapper;
@@ -34,6 +39,7 @@ public class AuthServiceImpl implements AuthService {
     public AuthServiceImpl(
             UserRepo userRepo,
             RoleRepo roleRepo,
+            VerificationCodeRepo verificationCodeRepo,
             BCryptPasswordEncoder bCryptPasswordEncoder,
             KafkaClient kafkaClient,
             ObjectMapper objectMapper,
@@ -41,6 +47,7 @@ public class AuthServiceImpl implements AuthService {
             RefreshTokenService refreshTokenService) {
         this.userRepo = userRepo;
         this.roleRepo = roleRepo;
+        this.verificationCodeRepo = verificationCodeRepo;
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
         this.kafkaClient = kafkaClient;
         this.objectMapper = objectMapper;
@@ -139,6 +146,33 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void logoutAll(String rawRefreshToken) {
         refreshTokenService.logoutAllSessions(rawRefreshToken);
+    }
+
+    // Looks up the VerificationCode row by the token's hash rather than the user,
+    // since the raw token itself is the only proof of a completed OTP verification.
+    @Override
+    @Transactional
+    public void resetPassword(String rawResetToken, String newPassword) {
+        VerificationCode verificationCode = verificationCodeRepo
+                .findByResetTokenHash(TokenHasher.hash(rawResetToken))
+                .orElseThrow(() -> new InvalidTokenException("Invalid or already used reset token"));
+
+        if (verificationCode.getResetTokenExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new TokenExpiredException("Reset token has expired");
+        }
+
+        User user = verificationCode.getUser();
+        user.setPassword(bCryptPasswordEncoder.encode(newPassword));
+        user.setUpdatedAt(new Date());
+        userRepo.save(user);
+
+        // Single-use: clear the token so it can't be replayed.
+        verificationCode.setResetTokenHash(null);
+        verificationCode.setResetTokenExpiresAt(null);
+        verificationCode.setUpdatedAt(new Date());
+        verificationCodeRepo.save(verificationCode);
+
+        refreshTokenService.revokeAllSessionsForUser(user.getId());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

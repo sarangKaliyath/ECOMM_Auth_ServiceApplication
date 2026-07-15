@@ -16,6 +16,7 @@ import com.ecomm.ecomm_auth_service_application.model.VerificationStatus;
 import com.ecomm.ecomm_auth_service_application.model.VerificationType;
 import com.ecomm.ecomm_auth_service_application.repository.UserRepo;
 import com.ecomm.ecomm_auth_service_application.repository.VerificationCodeRepo;
+import com.ecomm.ecomm_auth_service_application.security.TokenHasher;
 import com.ecomm.ecomm_auth_service_application.service.VerificationService;
 import com.ecomm.ecomm_auth_service_application.verification.CodeGenerator;
 import com.ecomm.ecomm_auth_service_application.verification.CodeHashService;
@@ -30,6 +31,7 @@ import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -76,7 +78,7 @@ public class VerificationServiceImpl implements VerificationService {
 
     @Override
     @Transactional
-    public void verifyCode(String email, String code, VerificationType verificationType) {
+    public String verifyCode(String email, String code, VerificationType verificationType) {
         rejectPhoneVerification(verificationType);
 
         VerificationCode verificationCode = verificationCodeRepo
@@ -109,7 +111,17 @@ public class VerificationServiceImpl implements VerificationService {
         verificationCode.setVerificationStatus(VerificationStatus.VERIFIED);
         verificationCode.setUsedAt(LocalDateTime.now());
         verificationCode.setUpdatedAt(new Date());
+
+        String rawResetToken = null;
+        if (verificationType == VerificationType.PASSWORD_RESET) {
+            rawResetToken = UUID.randomUUID().toString();
+            verificationCode.setResetTokenHash(TokenHasher.hash(rawResetToken));
+            verificationCode.setResetTokenExpiresAt(
+                    LocalDateTime.now().plusMinutes(verificationCodeProperties.getResetTokenExpiryMinutes()));
+        }
+
         verificationCodeRepo.save(verificationCode);
+        return rawResetToken;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

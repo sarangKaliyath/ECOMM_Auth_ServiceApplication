@@ -95,6 +95,13 @@ public class RefreshTokenService {
         sessionRepo.revokeAllSessionsForUser(session.getUser().getId());
     }
 
+    // Same revocation, but keyed directly by user id — used by password reset,
+    // where the caller has no raw refresh token to validate ownership through.
+    @Transactional
+    public void revokeAllSessionsForUser(Long userId) {
+        sessionRepo.revokeAllSessionsForUser(userId);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private Session validateSession(String rawToken) {

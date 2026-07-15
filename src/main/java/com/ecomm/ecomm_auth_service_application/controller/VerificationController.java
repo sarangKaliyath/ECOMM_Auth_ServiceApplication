@@ -2,6 +2,7 @@ package com.ecomm.ecomm_auth_service_application.controller;
 
 import com.ecomm.ecomm_auth_service_application.dto.SendCodeRequestDto;
 import com.ecomm.ecomm_auth_service_application.dto.VerifyCodeRequestDto;
+import com.ecomm.ecomm_auth_service_application.dto.VerifyCodeResponseDto;
 import com.ecomm.ecomm_auth_service_application.service.VerificationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,9 +26,16 @@ public class VerificationController {
         return ResponseEntity.noContent().build();
     }
 
+    // Returns 200 with a one-time resetToken when verificationType is PASSWORD_RESET
+    // (exchange it via POST /auth/reset-password); 204 for all other types.
     @PostMapping("/confirm")
-    public ResponseEntity<Void> verifyCode(@RequestBody VerifyCodeRequestDto request) {
-        verificationService.verifyCode(request.getEmail(), request.getCode(), request.getVerificationType());
+    public ResponseEntity<?> verifyCode(@RequestBody VerifyCodeRequestDto request) {
+        String resetToken = verificationService.verifyCode(
+                request.getEmail(), request.getCode(), request.getVerificationType());
+
+        if (resetToken != null) {
+            return ResponseEntity.ok(new VerifyCodeResponseDto(resetToken));
+        }
         return ResponseEntity.noContent().build();
     }
 }

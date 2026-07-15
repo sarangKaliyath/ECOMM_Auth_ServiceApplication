@@ -15,4 +15,6 @@ public interface VerificationCodeRepo extends JpaRepository<VerificationCode, Lo
 
     List<VerificationCode> findAllByEmailAndVerificationTypeAndVerificationStatus(
             String email, VerificationType verificationType, VerificationStatus verificationStatus);
+
+    Optional<VerificationCode> findByResetTokenHash(String resetTokenHash);
 }

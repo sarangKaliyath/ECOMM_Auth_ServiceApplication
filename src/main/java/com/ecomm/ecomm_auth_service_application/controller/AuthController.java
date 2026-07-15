@@ -89,4 +89,12 @@ public class AuthController {
     public void validateToken(@RequestBody TokenValidationRequest req) {
         authService.validateAccessToken(req.getToken());
     }
+
+    // Consumes the one-time resetToken returned by POST /verify/confirm
+    // (verificationType=PASSWORD_RESET) and sets the new password.
+    @PostMapping("/reset-password")
+    public ResponseEntity<Void> resetPassword(@RequestBody ResetPasswordRequestDto request) {
+        authService.resetPassword(request.getResetToken(), request.getNewPassword());
+        return ResponseEntity.noContent().build();
+    }
 }
