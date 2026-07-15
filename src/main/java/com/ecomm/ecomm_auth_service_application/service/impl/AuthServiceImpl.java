@@ -99,7 +99,7 @@ public class AuthServiceImpl implements AuthService {
         profileEvent.setLastName(lastName);
 
         try {
-            kafkaClient.sendMessage("signup", objectMapper.writeValueAsString(emailDto));
+            kafkaClient.sendMessage("email", objectMapper.writeValueAsString(emailDto));
             kafkaClient.sendMessage("user-created", objectMapper.writeValueAsString(profileEvent));
             return toResponse(savedUser);
         } catch (JsonProcessingException e) {
