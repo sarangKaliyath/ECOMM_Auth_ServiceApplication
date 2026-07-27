@@ -2,7 +2,7 @@ package com.ecomm.ecomm_auth_service_application.oauth;
 
 import com.ecomm.ecomm_auth_service_application.dto.OAuthLoginResult;
 import com.ecomm.ecomm_auth_service_application.security.CookieUtils;
-import com.ecomm.ecomm_auth_service_application.service.GoogleOAuthService;
+import com.ecomm.ecomm_auth_service_application.service.impl.GoogleOAuthService;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

@@ -1,4 +1,4 @@
-package com.ecomm.ecomm_auth_service_application.service;
+package com.ecomm.ecomm_auth_service_application.service.impl;
 
 import com.ecomm.ecomm_auth_service_application.dto.OAuthLoginResult;
 import com.ecomm.ecomm_auth_service_application.model.Role;
