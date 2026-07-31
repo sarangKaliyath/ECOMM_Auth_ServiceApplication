@@ -73,7 +73,7 @@ public class VerificationServiceImpl implements VerificationService {
 
         verificationCodeRepo.save(verificationCode);
 
-        sendVerificationEmail(email, rawCode, expiryMinutes);
+        sendVerificationEmail(email, rawCode, expiryMinutes, verificationType);
     }
 
     @Override
@@ -144,10 +144,11 @@ public class VerificationServiceImpl implements VerificationService {
         verificationCodeRepo.saveAll(pending);
     }
 
-    private void sendVerificationEmail(String email, String rawCode, long expiryMinutes) {
+    private void sendVerificationEmail(
+            String email, String rawCode, long expiryMinutes, VerificationType verificationType) {
         EmailDto emailDto = new EmailDto();
         emailDto.setTo(email);
-        emailDto.setEmailTemplate(EmailTemplate.PASSWORD_RESET);
+        emailDto.setEmailTemplate(emailTemplateFor(verificationType));
         emailDto.setVariables(Map.of(
                 "code", rawCode,
                 "expiryMinutes", String.valueOf(expiryMinutes)));
@@ -157,5 +158,14 @@ public class VerificationServiceImpl implements VerificationService {
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e.getMessage());
         }
+    }
+
+    private EmailTemplate emailTemplateFor(VerificationType verificationType) {
+        return switch (verificationType) {
+            case PASSWORD_RESET -> EmailTemplate.PASSWORD_RESET;
+            case EMAIL_VERIFICATION, LOGIN -> EmailTemplate.EMAIL_VERIFICATION;
+            default -> throw new UnsupportedVerificationTypeException(
+                    "No email template mapped for verification type " + verificationType);
+        };
     }
 }
