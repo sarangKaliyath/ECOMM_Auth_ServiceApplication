@@ -2,22 +2,22 @@
 
 Authentication and session-management microservice for the **ECOMM** e-commerce platform. It owns user identity end-to-end: signup, password and Google login, short-lived JWT access tokens, rotating refresh tokens with theft detection, and session/device management — and it exposes a single source of truth that every other service in the platform can call to verify a caller's identity.
 
-## Where it fits
+## How it fits in the platform
 
 The platform is split into independently deployable Spring Boot services, registered with and discovered through Eureka:
 
 | Service | Responsibility |
 |---|---|
-| **Auth Service** *(this repo)* | Identity, tokens, sessions |
-| Profile Service | User profile data (created reactively on signup) |
-| Product Service | Product catalog |
-| Cart Service | Shopping cart |
-| Ordering Service | Order lifecycle |
-| Payment Service | Payment processing |
-| Email Service | Transactional email delivery |
-| Service Discovery | Eureka registry |
+| **Auth Service** [*(this repo)*](https://github.com/sarangKaliyath/ECOMM_Auth_ServiceApplication)| Identity, tokens, sessions |
+| [Profile Service](https://github.com/sarangKaliyath/ECOMM_Profile_Service_Application) | User profile data (created reactively on signup) |
+| [Product Service](https://github.com/sarangKaliyath/ECOMM_Product_ServiceApplication) | Product catalog |
+| [Cart Service](https://github.com/sarangKaliyath/ECOMM_Cart_Service_Application) | Shopping cart |
+| [Ordering Service](https://github.com/sarangKaliyath/ECOMM_Ordering_Service_Application) | Order lifecycle |
+| [Payment Service](https://github.com/sarangKaliyath/ECOMM_Payment_Gateway_Service_Application) | Payment processing |
+| [Email Service](https://github.com/sarangKaliyath/ECOMM_Email_Service_Application) | Transactional email delivery |
+| [Service Discovery](https://github.com/sarangKaliyath/ECOMM_Service_Discovery_Application) | Eureka registry |
 
-The Auth Service publishes `user-created` and `signup` events to Kafka on signup so the Profile and Email services can react asynchronously — it never calls them directly.
+The Auth Service publishes `user-created` events to Kafka on signup so the Profile Service can react asynchronously, and `email` events (welcome, email-verification, password-reset) so the Email Service can send transactional mail — it never calls either service directly.
 
 ## Features
 
@@ -27,6 +27,8 @@ The Auth Service publishes `user-created` and `signup` events to Kafka on signup
 - **Rotating refresh tokens** — every refresh issues a brand-new token and immediately invalidates the one that was just used, limiting the value of a leaked token.
 - **Refresh-token theft detection** — tokens are grouped into a lineage (`familyId`) from the moment a user logs in. If an already-rotated (dead) token is ever replayed, the entire lineage is revoked immediately, logging out that compromised session chain.
 - **Hashed token storage** — refresh tokens are stored as SHA-256 hashes, never in plaintext, so a database read alone can't be used to impersonate a session.
+- **Email-based verification codes** — one-time codes for password reset and email verification, rate-limited by attempt count and expiry, delivered via the Email Service over Kafka.
+- **Password reset via verification code** — `POST /verify/send` + `POST /verify/confirm` issue a short-lived, single-use reset token, which `POST /auth/reset-password` exchanges for a new password. Resetting a password revokes every existing session for the account.
 - **Per-device and account-wide session control** — `POST /auth/logout` ends the current session; `POST /auth/logout-all` revokes every active session for the account across all devices in one call.
 - **HttpOnly, Secure, SameSite=Strict cookies** — the refresh token never touches client-side JavaScript or response bodies.
 - **Service discovery** — registers with Eureka so it can be called by name from anywhere in the platform.
@@ -58,6 +60,9 @@ Login intentionally does **not** return an access token — the client always fo
 | `POST` | `/auth/logout` | Revoke the current session | Refresh-token cookie |
 | `POST` | `/auth/logout-all` | Revoke every session for the account | Refresh-token cookie |
 | `POST` | `/auth/validate` | Verify an access token (used by other services) | Access token in body |
+| `POST` | `/verify/send` | Send a one-time verification code by email (login, password reset, or email verification) | No |
+| `POST` | `/verify/confirm` | Confirm a verification code; returns a one-time reset token when the type is `PASSWORD_RESET` | No |
+| `POST` | `/auth/reset-password` | Exchange a reset token (from `/verify/confirm`) for a new password | Reset token in body |
 | `GET`  | `/user/{id}` | Fetch user details by id | — |
 
 ## Tech stack
@@ -91,11 +96,11 @@ The service registers itself with Eureka on startup and is then reachable by oth
 
 ## In progress
 
-The data model for OTP-based flows (`UserOtp`, `OtpType`) already exists in the codebase; the service/controller layer for these is under active development and not yet exposed:
+Verification codes support four types (`LOGIN`, `PASSWORD_RESET`, `EMAIL_VERIFICATION`, `PHONE_VERIFICATION`), but not all are wired end-to-end yet:
 
-- **OTP-based login** — one-time-passcode as an alternative to password login.
-- **Password reset via OTP** — request a reset code by email, verify it, set a new password.
-- **Registration OTP verification** — confirm a new account's email address at signup.
+- **OTP-based login** — codes can be sent and confirmed for `LOGIN`, but no endpoint yet accepts a verified code in place of a password to actually log in.
+- **Registration email verification** — `EMAIL_VERIFICATION` codes can be sent and confirmed, but signup does not yet require a confirmed code before the account is usable.
+- **Phone verification** — modeled as a `VerificationType` but explicitly rejected by the service (`UnsupportedVerificationTypeException`); not implemented.
 
 ## Roadmap
 
